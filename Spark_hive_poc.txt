@@ -1,0 +1,51 @@
+val base_file_df = spark.read.format("com.databricks.spark.csv").option("header","true").load("s3://crstpocfiles/emp_csv_files/emp_base.csv")
+base_file_df.show()
+
+base_file_df.createOrReplaceTempView("base_file_df");
+spark.sql("drop table if exists crst_dev.base_file_df");
+spark.sql("create table crst_dev.base_file_df as select * from base_file_df");
+spark.sql("select * from crst_dev.base_file_df").show(5)
+
+val base_file_df1 = base_file_df.withColumn("emp_status",lit("I")).withColumn("emp_date",lit(current_date))
+base_file_df1.show()
+
+base_file_df1.createOrReplaceTempView("base_file_df1");
+
+spark.sql("drop table if exists crst_dev.base_file_df1");
+spark.sql("create table crst_dev.base_file_df1 as select * from base_file_df1");
+spark.sql("select * from crst_dev.base_file_df1").show(5)
+
+
+val cdc_file_df = spark.read.format("com.databricks.spark.csv").option("header","true").load("s3://crstpocfiles/emp_csv_files/emp_cdc.csv")
+cdc_file_df.show()
+
+cdc_file_df.createOrReplaceTempView("cdc_file_df");
+spark.sql("drop table if exists crst_dev.cdc_file_df");
+spark.sql("create table crst_dev.cdc_file_df as select * from cdc_file_df");
+spark.sql("select * from crst_dev.cdc_file_df").show(3)
+
+
+val cdc_file_df1 = cdc_file_df.withColumn("emp_date",lit(current_date))
+cdc_file_df1.show()
+
+cdc_file_df1.createOrReplaceTempView("cdc_file_df1");
+
+spark.sql("drop table if exists crst_dev.cdc_file_df1");
+spark.sql("create table crst_dev.cdc_file_df1 as select * from cdc_file_df1");
+spark.sql("select * from crst_dev.cdc_file_df1").show(3)
+
+/*  emp_id	emp_name	emp_desc emp_status emp_date
+
+val merge_df = cdc_file_df1.join(base_file_df1,cdc_file_df1.col("emp_id").equalTo(base_file_df1.col("emp_id")),"left_outer").where((cdc_file_df1.col("emp_id").isNotNull).and(cdc_file_df1.col("emp_status").notEqual(lit('D')))).select(cdc_file_df1.col("emp_id"),cdc_file_df1.col("emp_name"),cdc_file_df1.col("emp_desc"),lit("I").as("emp_status"),cdc_file_df1.col("emp_date"))
+merge_df.show()
+
+val merge_df1 = base_file_df1.join(cdc_file_df1,cdc_file_df1.col("emp_id").equalTo(base_file_df1.col("emp_id")),"left_outer").where(cdc_file_df1.col("emp_id").isNull).select(base_file_df1.col("*"))
+merge_df1.show()
+
+val final_df = merge_df.union(merge_df1)
+final_df.createOrReplaceTempView("final_df");
+
+spark.sql("drop table if exists crst_dev.final_df");
+spark.sql("create table crst_dev.final_df as select * from final_df");
+spark.sql("select * from crst_dev.final_df").show()
+final_df.show()

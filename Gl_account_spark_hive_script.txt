@@ -1,0 +1,67 @@
+
+
+
+//Loading to GL account full load CSV file to hive base table
+
+val Gl_account_base_file_df = spark.read.format("com.databricks.spark.csv").option("header","true").option("delimiter", "\t").option("inferSchema", "true").load("s3://techmdatalakepoc/accountdataexcel.txt")
+Gl_account_base_file_df.show(5)
+
+Gl_account_base_file_df.createOrReplaceTempView("Gl_account_base_file_df");
+spark.sql("drop table if exists crst_dev.Gl_account_base_file_df");
+spark.sql("create table crst_dev.Gl_account_base_file_df as select * from Gl_account_base_file_df");
+spark.sql("select * from crst_dev.Gl_account_base_file_df").show(5)
+
+//From GL account with status
+
+val Gl_account_base_file_with_status_df = Gl_account_base_file_df.withColumn("status",lit("I")).withColumn("emp_date",lit(current_date))
+Gl_account_base_file_with_status_df.createOrReplaceTempView("Gl_account_base_file_with_status_df");
+
+spark.sql("drop table if exists crst_dev.Gl_account_base_file_with_status_df");
+spark.sql("create table crst_dev.Gl_account_base_file_with_status_df as select * from Gl_account_base_file_with_status_df");
+spark.sql("select * from crst_dev.Gl_account_base_file_with_status_df").show(5)
+
+//val Gl_account_base_file_with_status_df = spark.sql("select * from crst_dev.Gl_account_base_file_with_status_df")
+//Gl_account_base_file_with_status_df.createOrReplaceTempView("Gl_account_base_file_with_status_df");
+//spark.sql("select count(*) from crst_dev.Gl_account_base_file_with_status_df").show()
+
+//Loading to GL account partial load CSV file to hive cdc table
+
+val Gl_account_cdc_file_df = spark.read.format("com.databricks.spark.csv").option("header","true").option("delimiter", "\t").option("inferSchema", "true").load("s3://techmdatalakepoc/accountdataexcel_cdc.txt")
+Gl_account_cdc_file_df.show(5)
+
+Gl_account_cdc_file_df.createOrReplaceTempView("Gl_account_cdc_file_df");
+spark.sql("drop table if exists crst_dev.Gl_account_cdc_file_df");
+spark.sql("create table crst_dev.Gl_account_cdc_file_df as select * from Gl_account_cdc_file_df");
+spark.sql("select * from crst_dev.Gl_account_cdc_file_df").show(3)
+
+val Gl_account_cdc_file_with_status_df = Gl_account_cdc_file_df.withColumn("emp_date",lit(current_date))
+Gl_account_cdc_file_with_status_df.createOrReplaceTempView("Gl_account_cdc_file_with_status_df");
+
+spark.sql("drop table if exists crst_dev.Gl_account_cdc_file_with_status_df");
+spark.sql("create table crst_dev.Gl_account_cdc_file_with_status_df as select * from Gl_account_cdc_file_with_status_df");
+spark.sql("select * from crst_dev.Gl_account_cdc_file_with_status_df").show(3)
+
+
+//val Gl_account_cdc_file_with_status_df = spark.sql("select * from crst_dev.Gl_account_cdc_file_with_status_df")
+//Gl_account_cdc_file_with_status_df.createOrReplaceTempView("Gl_account_cdc_file_with_status_df");
+//spark.sql("select count(*) from crst_dev.Gl_account_cdc_file_with_status_df").show()
+
+/*  Incremental loading based on id and status
+
+val merge_df = Gl_account_cdc_file_with_status_df.join(Gl_account_base_file_with_status_df,Gl_account_cdc_file_with_status_df.col("id").equalTo(Gl_account_base_file_with_status_df.col("id")),"left_outer").where((Gl_account_cdc_file_with_status_df.col("id").isNotNull).and(Gl_account_cdc_file_with_status_df.col("status").notEqual(lit('D')))).select(Gl_account_cdc_file_with_status_df.col("*"))
+merge_df.show()
+val merge_status_df = merge_df.drop(merge_df.col("status")).drop(merge_df.col("emp_date")).withColumn("status",lit("I")).withColumn("emp_date",lit(current_date))
+merge_status_df.show()
+
+val merge_df1 = Gl_account_base_file_with_status_df.join(Gl_account_cdc_file_with_status_df,Gl_account_cdc_file_with_status_df.col("id").equalTo(Gl_account_base_file_with_status_df.col("id")),"left_outer").where(Gl_account_cdc_file_with_status_df.col("id").isNull).select(Gl_account_base_file_with_status_df.col("*"))
+merge_df1.show()
+
+val final_df = merge_status_df.union(merge_df1)
+final_df.show()
+
+final_df.createOrReplaceTempView("final_df");
+spark.sql("drop table if exists crst_dev.Gl_account_base_file_with_status_df");
+spark.sql("create table crst_dev.Gl_account_base_file_with_status_df as select * from final_df");
+spark.sql("select * from crst_dev.Gl_account_base_file_with_status_df").show(3)
+
+spark.sql("select count(*) from crst_dev.Gl_account_base_file_with_status_df").show()
